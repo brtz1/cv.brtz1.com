@@ -75,7 +75,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   is_ipv6_enabled     = true
   comment             = "cv.brtz1.com"
   default_root_object = "index.html"
-  price_class         = PriceClass_All
+  price_class         = "PriceClass_All"
   tags = {
     Name = "cv.brtz1.com"
   }
