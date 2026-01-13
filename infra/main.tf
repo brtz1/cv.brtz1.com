@@ -75,7 +75,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   is_ipv6_enabled     = true
   comment             = "cv.brtz1.com"
   default_root_object = "index.html"
-  price_class         = var.price_class
+  price_class         = PriceClass_All
   tags = {
     Name = "cv.brtz1.com"
   }
@@ -260,7 +260,7 @@ resource "aws_lambda_function_url" "counter" {
   cors {
     allow_credentials = false
     allow_headers     = ["content-type"]
-    allow_methods     = ["GET", "POST", "OPTIONS"]
+    allow_methods     = ["GET", "POST"]
     allow_origins     = ["https://${local.subdomain_fqdn}"]
     max_age           = 86400
   }
