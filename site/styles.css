@@ -172,6 +172,12 @@ a:focus-visible{
   margin-top: 16px;
 }
 
+/* Long URLs wrap nicely inside cards */
+.list a{
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .card{
   padding: 18px 18px;
   border: 1px solid var(--line);
