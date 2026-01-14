@@ -161,6 +161,17 @@ a:focus-visible{
   gap: 16px;
 }
 
+/* ✅ More spacing between stacked cards in the LEFT column (Introduction / Degree / Languages) */
+.layout > :first-child{
+  display: flex;
+  flex-direction: column;
+  gap: 16px; /* adjust (e.g. 18px / 20px) if you want more */
+}
+/* Safety fallback if the left column isn't a direct wrapper */
+.layout > :first-child .card + .card{
+  margin-top: 16px;
+}
+
 .card{
   padding: 18px 18px;
   border: 1px solid var(--line);
@@ -272,4 +283,8 @@ a:focus-visible{
   }
   .muted{ color: #374151 !important; }
   a{ text-decoration: none; color: #111827; }
+
+  /* avoid weird gaps in print if layout changes */
+  .layout > :first-child{ gap: 0 !important; }
+  .layout > :first-child .card + .card{ margin-top: 12px !important; }
 }
