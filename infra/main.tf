@@ -231,11 +231,6 @@ data "archive_file" "lambda_zip" {
   type        = "zip"
   source_file = "${path.module}/../lambda/lambda_function.py"
   output_path = "${path.module}/.build/lambda_package.zip"
-
-  excludes = [
-    "**/lambda_package.zip",
-    "**/.DS_Store",
-  ]
 }
 
 resource "aws_lambda_function" "counter" {
