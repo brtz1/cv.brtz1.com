@@ -122,7 +122,7 @@ resource "aws_cloudfront_distribution" "cdn" {
 # Bucket policy allowing only this CloudFront distribution (OAC) to read objects
 data "aws_iam_policy_document" "site_bucket_policy" {
   statement {
-    sid    = "AllowCloudFrontServicePrincipal"
+    sid    = "AllowCloudFrontServicePrincipalReadOnly"
     effect = "Allow"
 
     principals {
@@ -134,12 +134,13 @@ data "aws_iam_policy_document" "site_bucket_policy" {
     resources = ["${aws_s3_bucket.site.arn}/*"]
 
     condition {
-      test     = "ArnLike"
+      test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values   = ["arn:aws:cloudfront::173294455146:distribution/${aws_cloudfront_distribution.cdn.id}"]
+      values   = [aws_cloudfront_distribution.cdn.arn]
     }
   }
 }
+
 
 resource "aws_s3_bucket_policy" "site" {
   bucket = aws_s3_bucket.site.id
