@@ -32,7 +32,7 @@ jobs:
 
       - name: Sync site to S3
         run: |
-          aws s3 sync site/ ${{ vars.BUCKET_NAME }}/ \
+          aws s3 sync site/ s3://${{ vars.BUCKET_NAME }}/ \
             --delete \
             --exact-timestamps
 
