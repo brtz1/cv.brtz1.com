@@ -45,3 +45,13 @@ variable "cloudfront_web_acl_id" {
   type        = string
   default     = "arn:aws:wafv2:us-east-1:173294455146:global/webacl/CreatedByCloudFront-8df85bb0/7eae0403-f581-4d99-aea4-b6a72d482d15"
 }
+
+variable "github_repo" {
+  type    = string
+  default = "brtz1/cv.brtz1.com"
+}
+
+variable "github_environment" {
+  type    = string
+  default = "production"
+}
