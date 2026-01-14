@@ -19,8 +19,7 @@ jobs:
     name: Deploy /site
     runs-on: ubuntu-latest
 
-    # This is what enforces "after approval" via GitHub Environment rules
-    environment: prod
+    environment: production
 
     steps:
       - name: Checkout

@@ -1,16 +1,19 @@
 data "aws_caller_identity" "current" {}
+data "tls_certificate" "github_actions" {
+  url = "https://token.actions.githubusercontent.com"
+}
 
 resource "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
-
+  url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
 
   thumbprint_list = [
-    # GitHub's OIDC thumbprint is commonly this, but can change over time.
-    # If you already manage this provider elsewhere, remove this resource
-    # and reference the existing provider ARN in the role.
-    "6938fd4d98bab03faadb97b34396831e3780aea1"
+    data.tls_certificate.github_actions.certificates[0].sha1_fingerprint
   ]
+
+  tags = {
+    Name = "github-actions-oidc"
+  }
 }
 
 resource "aws_iam_role" "github_site_deploy" {
@@ -19,7 +22,6 @@ resource "aws_iam_role" "github_site_deploy" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # Allow ONLY workflows from this repo AND this GitHub Environment
       {
         Effect = "Allow"
         Principal = {
@@ -29,7 +31,9 @@ resource "aws_iam_role" "github_site_deploy" {
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+            "token.actions.githubusercontent.com:iss" = "https://token.actions.githubusercontent.com"
           }
+
           StringLike = {
             "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:environment:${var.github_environment}"
           }
@@ -37,6 +41,10 @@ resource "aws_iam_role" "github_site_deploy" {
       }
     ]
   })
+
+  tags = {
+    Name = "github-actions-site-deploy"
+  }
 }
 
 resource "aws_iam_policy" "github_site_deploy" {
@@ -45,14 +53,18 @@ resource "aws_iam_policy" "github_site_deploy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+
       {
         Sid    = "S3ListBucket"
         Effect = "Allow"
-        Action = ["s3:ListBucket"]
-        Resource = [
-          "arn:aws:s3:::${var.bucket_name}"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation",
+          "s3:ListBucketMultipartUploads"
         ]
+        Resource = "arn:aws:s3:::${var.bucket_name}"
       },
+
       {
         Sid    = "S3ObjectsRW"
         Effect = "Allow"
@@ -60,22 +72,24 @@ resource "aws_iam_policy" "github_site_deploy" {
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
-          "s3:PutObjectAcl"
+          "s3:AbortMultipartUpload",
+          "s3:ListMultipartUploadParts"
         ]
-        Resource = [
-          "arn:aws:s3:::${var.bucket_name}/*"
-        ]
+        Resource = "arn:aws:s3:::${var.bucket_name}/*"
       },
+
       {
-        Sid    = "CloudFrontInvalidation"
-        Effect = "Allow"
-        Action = ["cloudfront:CreateInvalidation"]
-        Resource = [
-          "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${aws_cloudfront_distribution.cdn.id}"
-        ]
+        Sid      = "CloudFrontInvalidation"
+        Effect   = "Allow"
+        Action   = ["cloudfront:CreateInvalidation"]
+        Resource = "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:distribution/${aws_cloudfront_distribution.cdn.id}"
       }
     ]
   })
+
+  tags = {
+    Name = "github-actions-site-deploy-policy"
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "github_site_deploy_attach" {
