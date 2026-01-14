@@ -31,7 +31,6 @@ resource "aws_iam_role" "github_site_deploy" {
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-            "token.actions.githubusercontent.com:iss" = "https://token.actions.githubusercontent.com"
           }
 
           StringLike = {
