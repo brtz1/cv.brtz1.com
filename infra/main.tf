@@ -2,6 +2,12 @@ locals {
   zone_name      = "var.domain_name"
   subdomain_fqdn = "${var.subdomain}.${var.domain_name}"
   bucket_name    = "resume-static-website1"
+
+  rum_monitor_name = "cv.brtz1.com"
+  rum_domain_list = ["cv.brtz1.com"]
+
+  rum_identity_pool_id = "eu-south-2:349dda70-ee21-462e-a5d1-a7601cd4b0cc"
+  rum_unauth_role_name = "RUM-Monitor-eu-south-2-173294455146-7920396748671-Unauth"
 }
 
 ############################
@@ -87,6 +93,10 @@ resource "aws_cloudfront_distribution" "cdn" {
     origin_id                = "s3-${aws_s3_bucket.site.id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
 
+    connection_attempts = 3
+    connection_timeout  = 10
+    response_completion_timeout = 30
+
     s3_origin_config {
       # Required block; OAC is used (not OAI), so keep it empty
       origin_access_identity = ""
@@ -136,7 +146,7 @@ data "aws_iam_policy_document" "site_bucket_policy" {
     condition {
       test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.cdn.arn]
+      values   = ["arn:aws:cloudfront::173294455146:distribution/${aws_cloudfront_distribution.cdn.id}"]
     }
   }
 }
@@ -206,13 +216,13 @@ resource "aws_iam_role" "visitor_counter" {
   })
 }
 
-# Managed policy attachment (existing)
+# Managed policy attachment
 resource "aws_iam_role_policy_attachment" "visitor_counter_basic" {
   role       = aws_iam_role.visitor_counter.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Inline policy (existing): VisitorCounterDB
+# Inline policy: VisitorCounterDB
 resource "aws_iam_role_policy" "visitor_counter_db" {
   name = "VisitorCounterDB"
   role = aws_iam_role.visitor_counter.id
@@ -228,10 +238,21 @@ resource "aws_iam_role_policy" "visitor_counter_db" {
   })
 }
 
+resource "aws_iam_role_policy_attachment" "rum_put_batch_metrics" {
+  role       = aws_iam_role.rum_unauth.name
+  policy_arn = "arn:aws:iam::173294455146:policy/service-role/RUMPutBatchMetrics-7920396748671"
+}
+
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = "${path.module}/../lambda/lambda_function.py"
+  source_dir = "${path.module}/../lambda"
   output_path = "${path.module}/.build/lambda_package.zip"
+
+  excludes = [
+    "*.zip",
+    ".DS_Store",
+    "__pycache__",
+    ]
 }
 
 resource "aws_lambda_function" "counter" {
@@ -264,5 +285,71 @@ resource "aws_lambda_function_url" "counter" {
     allow_methods     = ["GET", "POST"]
     allow_origins     = ["https://${local.subdomain_fqdn}"]
     max_age           = 86400
+  }
+}
+
+# --- Cognito Identity Pool ---
+resource "aws_cognito_identity_pool" "rum" {
+  identity_pool_name               = "RUM-Monitor-eu-south-2-173294455146-7920396748671"
+  allow_unauthenticated_identities = true
+
+  lifecycle {
+    ignore_changes = [
+      identity_pool_name
+    ]
+  }
+}
+
+# --- IAM unauth role ---
+resource "aws_iam_role" "rum_unauth" {
+  name = local.rum_unauth_role_name
+  description = "CloudWatch Put RUM events for application monitors"
+  path = "/service-role/"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = { Federated = "cognito-identity.amazonaws.com" }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "cognito-identity.amazonaws.com:aud" = aws_cognito_identity_pool.rum.id
+        }
+        "ForAnyValue:StringLike" = {
+          "cognito-identity.amazonaws.com:amr" = "unauthenticated"
+        }
+      }
+    }]
+  })
+}
+
+# --- CloudWatch RUM App Monitor ---
+resource "aws_rum_app_monitor" "rum" {
+  name           = local.rum_monitor_name
+  domain_list = local.rum_domain_list
+  cw_log_enabled = false
+
+  app_monitor_configuration {
+    identity_pool_id    = aws_cognito_identity_pool.rum.id
+    session_sample_rate = 1.0
+    telemetries         = ["errors", "http", "performance"]
+    allow_cookies       = true
+    enable_xray         = false
+
+    guest_role_arn = null
+  }
+}
+
+# --- Identity pool roles attachment ---
+resource "aws_cognito_identity_pool_roles_attachment" "rum" {
+  identity_pool_id = aws_cognito_identity_pool.rum.id
+
+  roles = {
+    unauthenticated = aws_iam_role.rum_unauth.arn
+  }
+
+  lifecycle {
+    ignore_changes = [roles]
   }
 }
