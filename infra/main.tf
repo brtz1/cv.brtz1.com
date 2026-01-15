@@ -297,7 +297,7 @@ resource "aws_lambda_function" "counter" {
   runtime       = "python3.14"
 
   filename         = data.archive_file.lambda_zip.output_path
-  source_code_hash = local.lambda_source_code_hash
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
   environment {
     variables = {
