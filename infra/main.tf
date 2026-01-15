@@ -278,16 +278,10 @@ resource "aws_iam_role_policy_attachment" "rum_put_batch_metrics" {
 
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_dir = local.lambda_src_dir
+  source_file = "${path.module}/../lambda/lambda_function.py"
   output_path = "${path.module}/.build/lambda_package.zip"
-
-  excludes = [
-    "*.zip",
-    "**/*.zip",
-    ".DS_Store",
-    "**/__pycache__/**",
-    ]
 }
+
 
 resource "aws_lambda_function" "counter" {
   provider      = aws.use1
