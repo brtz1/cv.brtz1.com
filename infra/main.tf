@@ -3,11 +3,27 @@ locals {
   subdomain_fqdn = "${var.subdomain}.${var.domain_name}"
   bucket_name    = "resume-static-website1"
 
+  cf_source_arn = "arn:aws:cloudfront::173294455146:distribution/${aws_cloudfront_distribution.cdn.id}"
+
   rum_monitor_name = "cv.brtz1.com"
   rum_domain_list = ["cv.brtz1.com"]
 
   rum_identity_pool_id = "eu-south-2:349dda70-ee21-462e-a5d1-a7601cd4b0cc"
   rum_unauth_role_name = "RUM-Monitor-eu-south-2-173294455146-7920396748671-Unauth"
+
+  lambda_src_dir = "${path.module}/../lambda"
+
+  lambda_files = sort([
+    for f in fileset(local.lambda_src_dir, "**") :
+    f
+    if !endswith(f, ".zip") &&
+       f != ".DS_Store" &&
+       !contains(split("/", f), "__pycache__")
+  ])
+
+  lambda_source_code_hash = base64sha256(join("", [
+    for f in local.lambda_files : filesha256("${local.lambda_src_dir}/${f}")
+  ]))
 }
 
 ############################
@@ -93,16 +109,14 @@ resource "aws_cloudfront_distribution" "cdn" {
     origin_id                = "s3-${aws_s3_bucket.site.id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
 
-    connection_attempts = 3
-    connection_timeout  = 10
-    response_completion_timeout = 30
-
     s3_origin_config {
-      # Required block; OAC is used (not OAI), so keep it empty
       origin_access_identity = ""
     }
   }
 
+  lifecycle {
+    ignore_changes = [origin]
+  }
   default_cache_behavior {
     target_origin_id       = "s3-${aws_s3_bucket.site.id}"
     viewer_protocol_policy = "redirect-to-https"
@@ -153,7 +167,26 @@ data "aws_iam_policy_document" "site_bucket_policy" {
 
 resource "aws_s3_bucket_policy" "site" {
   bucket = aws_s3_bucket.site.id
-  policy = data.aws_iam_policy_document.site_bucket_policy.json
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowCloudFrontServicePrincipalReadOnly"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.site.arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = local.cf_source_arn
+          }
+        }
+      }
+    ]
+  })
 }
 
 
@@ -245,13 +278,14 @@ resource "aws_iam_role_policy_attachment" "rum_put_batch_metrics" {
 
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_dir = "${path.module}/../lambda"
+  source_dir = local.lambda_src_dir
   output_path = "${path.module}/.build/lambda_package.zip"
 
   excludes = [
     "*.zip",
+    "**/*.zip",
     ".DS_Store",
-    "__pycache__",
+    "**/__pycache__/**",
     ]
 }
 
@@ -263,7 +297,7 @@ resource "aws_lambda_function" "counter" {
   runtime       = "python3.14"
 
   filename         = data.archive_file.lambda_zip.output_path
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  source_code_hash = local.lambda_source_code_hash
 
   environment {
     variables = {
