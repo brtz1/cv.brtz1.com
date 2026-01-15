@@ -132,8 +132,8 @@ resource "aws_cloudfront_distribution" "cdn" {
 # Bucket policy allowing only this CloudFront distribution (OAC) to read objects
 data "aws_iam_policy_document" "site_bucket_policy" {
   statement {
-    sid    = "AllowCloudFrontServicePrincipalReadOnly"
-    effect = "Allow"
+    sid     = "AllowCloudFrontServicePrincipalReadOnly"
+    effect  = "Allow"
 
     principals {
       type        = "Service"
@@ -151,11 +151,11 @@ data "aws_iam_policy_document" "site_bucket_policy" {
   }
 }
 
-
 resource "aws_s3_bucket_policy" "site" {
   bucket = aws_s3_bucket.site.id
   policy = data.aws_iam_policy_document.site_bucket_policy.json
 }
+
 
 ############################
 # Route53 records for cv.brtz1.com (existing A/AAAA)
